@@ -99,3 +99,40 @@ export DISPLAY=:0
 *   **The Isolation:** Your Android terminal runs on a pseudo-terminal (`/dev/pts/1`), while the graphics sandbox lives on a virtual console (`/dev/tty1`). They are naturally isolated.
 *   **The Identifier (`:0`):** In X11/XWayland architecture, `:0` represents the first local graphical display.
 *   **The Bridge (`export`):** By exporting `DISPLAY=:0`, you create a signpost. Any GUI application launched from this shell will read this variable and route its graphical instructions to the display server running on local screen zero instead of attempting to output to the command line.
+
+
+---
+
+## Phase 4: Deep Dive into the Weston Service
+
+The `ExecStart` command within `weston.service` handles the execution and internal architecture configuration of the display server. Each flag directly prepares the compositor to operate cleanly within a headless, virtualized environment.
+
+```ini
+ExecStart=/usr/bin/weston --modules=systemd-notify.so --xwayland --shell=desktop-shell.so --continue-without-input
+```
+
+### Flag-by-Flag Architectural Breakdown
+
+```text
+/usr/bin/weston  --modules=systemd-notify.so  --xwayland  --shell=desktop-shell.so  --continue-without-input
+ ───────┬───────  ──────────────┬─────────────  ────┬─────  ─────────────┬────────────  ──────────────┬─────────────
+        │                       │                   │                    │                          │
+ 1. Core Binary          2. OS Handshake     3. Legacy Proxy      4. Window Management       5. Headless Bypass
+```
+
+#### 1. OS Synchronization & Handshaking (`--modules=systemd-notify.so`)
+*   **The Problem:** Setting up graphics paths, opening communication sockets, and loading libraries takes millisecond processing time. If systemd immediately assumes Weston is ready upon spawning, a GUI application could launch prematurely, query a half-baked socket, and instantly crash.
+*   **The Mechanism:** `weston.service` is defined with `Type=notify`. This flag loads a communication plugin that takes over the readiness reporting sequence. Weston completes its software initialization, binds to its socket loops, and then actively sends an "I am ready" signal back up to systemd. Only upon receiving this does systemd transition the service state to fully active, signaling that it is safe to spawn apps.
+
+#### 2. Legacy Client Backward Compatibility (`--xwayland`)
+*   **The Action:** This tells Weston to automatically spawn an independent background translation layer called Xwayland.
+*   **The Mechanism:** Modern toolkits speak native Wayland protocols, but legacy Linux programs rely on the decades-old X11 subsystem. When an X11-dependent program tries to open its interface via your exported `DISPLAY=:0` signpost, the Xwayland proxy catches those instructions. It translates traditional X11 rendering operations into modern Wayland surfaces on the fly, allowing legacy and modern native apps to coexist seamlessly on the same virtual display canvas.
+
+#### 3. Visual Environment Layout Management (`--shell=desktop-shell.so`)
+*   **The Action:** Configures the base window management paradigm for the window environment.
+*   **The Mechanism:** Wayland separates core graphics serving from structural window layouts (window borders, panel taskbars, maximizing/minimizing behaviors, and workspace layers). By passing `desktop-shell.so` as a pluggable component, Weston instantiates a companion process (`weston-desktop-shell`) that structures the visual canvas to mimic a traditional PC desktop paradigm.
+
+#### 4. Headless Environment Safety Bypass (`--continue-without-input`)
+*   **The Problem:** Standard Linux display servers heavily expect physical input devices (USB keyboards, hardware laptop trackpads, or touch screens) to be physically tied to the kernel bus during boot. If a traditional display server scans the motherboard bus and detects zero input hardware devices attached, it panics and crashes to protect itself from booting into an unusable state.
+*   **The Mechanism:** Because this subsystem operates inside an isolated virtual container, it lacks direct access to raw physical USB input hardware paths. The `--continue-without-input` option overrides this sanity metric. It explicitly commands Weston to bypass the device scanning check, ignore the absence of physical inputs, and proceed into its operational drawing loops without throwing a fatal panic error.
+
