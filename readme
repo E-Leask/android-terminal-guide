@@ -1,1 +1,39 @@
-intro
+# Android Terminal Guide
+
+## Removing Weston
+
+To remove Weston from launching as the display server, follow these steps:
+
+1. **Disable Auto-launch on Login:**
+   Weston is triggered by a script in `/etc/profile.d/`. Remove or move this file to prevent it from starting when you log in.
+   ```bash
+   sudo rm /etc/profile.d/activate_display.sh
+   ```
+
+2. **Stop and Mask Systemd Services:**
+   Stop the current Weston session and mask the service and socket to prevent them from being started again.
+   ```bash
+   systemctl --user stop weston.service weston.socket
+   systemctl --user mask weston.service weston.socket
+   ```
+
+3. **Clean up helper scripts:**
+   Remove the scripts that configure the graphics environment.
+   ```bash
+   sudo rm /usr/local/bin/enable_gfxstream /usr/local/bin/enable_display
+   ```
+
+4. **(Optional) Remove related environment setup:**
+   You may also want to remove the `weston.env` file in your home directory.
+   ```bash
+   rm ~/weston.env
+   ```
+
+## Backup Configurations
+
+The original configuration files and helper scripts have been copied to the `configs/` directory in this repository for reference or restoration:
+- `activate_display.sh`: Profile script for auto-launching.
+- `enable_display`: Standard display enablement script.
+- `enable_gfxstream`: Gfxstream enablement script.
+- `weston.service`: Systemd user service for Weston.
+- `weston.socket`: Systemd user socket for Weston.
