@@ -29,6 +29,23 @@ To remove Weston from launching as the display server, follow these steps:
    rm ~/weston.env
    ```
 
+### Quick Removal (Cookbook)
+Copy and paste the following block to perform all removal steps at once:
+```bash
+# Disable auto-launch
+sudo rm /etc/profile.d/activate_display.sh
+
+# Stop and mask services
+systemctl --user stop weston.service weston.socket
+systemctl --user mask weston.service weston.socket
+
+# Remove helper scripts
+sudo rm /usr/local/bin/enable_gfxstream /usr/local/bin/enable_display
+
+# Remove environment file
+rm ~/weston.env
+```
+
 ## Backup Configurations
 
 The original configuration files and helper scripts have been copied to the `configs/` directory in this repository for reference or restoration:
