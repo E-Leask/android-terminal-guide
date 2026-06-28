@@ -2,7 +2,7 @@
 ## Extra recipe notes
 sudo apt update && sudo apt install -y nodejs npm
 npm install -g @google/gemini-cli
-gemini login
+sudo gemini login
 
 ## Removing Weston
 
