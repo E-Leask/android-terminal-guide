@@ -1,226 +1,111 @@
-# Converting Weston to Launch via Greetd
+# Converting Weston to Launch via Greetd (Architectural Limitations & Recovery)
 
-This guide outlines the steps to configure the system to launch Weston automatically at boot using the `greetd` login/session manager, replacing the default `systemd-run` and profile-based auto-launch mechanism.
-
-## Overview
-
-By default, the Android terminal environment initializes its graphical session on `tty1` via a combination of a `systemd-run sleep 1d` session (triggered from `/etc/profile.d/activate_display.sh`) and user-level systemd services (`weston.service`/`weston.socket`).
-
-Migrating to `greetd` provides a cleaner, standard Linux session architecture:
-1. **Native Session Management:** `greetd` manages PAM login sessions and the lifecycle of the graphical server natively.
-2. **True System Service:** Weston starts automatically at boot via `greetd.service` rather than waiting for an interactive user shell login.
-3. **No Background systemd-run Hacks:** Bypasses the need for spawning dummy `sleep` commands on virtual terminals.
+> [!CAUTION]
+> **UNSTABLE CONFIGURATION WARNING:**
+> Configuring `greetd` to launch Weston automatically at boot inside this virtualized Android terminal environment is **inherently unstable** and can lead to a **complete crash of the host terminal application** and guest VM panic/reboot.
+>
+> It is strongly recommended to use the original on-demand display initialization. This document outlines why this limitation exists and how to completely revert the system to the stable original configuration.
 
 ---
 
-## 1. Stop and Disable Legacy Weston Services
+## Why Greetd Autostart Fails (Architectural Analysis)
 
-First, stop the existing Weston user-level services and disable the automatic profile script that initiates them.
+In a standard Linux desktop environment, the GPU and DRM subsystems are initialized by the kernel at boot, allowing `greetd` to safely claim `tty1` and run the compositor. 
 
-```bash
-# Disable the interactive login autostart script
-sudo rm /etc/profile.d/activate_display.sh
-
-# Stop and mask the systemd user Weston service and socket
-systemctl --user stop weston.service weston.socket
-systemctl --user mask weston.service weston.socket
-```
+However, the Android terminal virtualized environment operates under a guest-host model:
+1. **Host Display Activity Dependency:** The guest VM’s `virtio-gpu` driver depends on the host Android Display Activity being actively open and connected.
+2. **Early Boot Race Conditions:** When `greetd.service` starts automatically during early boot, it attempts to claim the DRM seat (`/dev/dri/card0`) and perform atomic page commits while the host display activity is inactive.
+3. **VM Panics & Host Crashes:** This leads to guest kernel-level DRM atomic commit failures (`atomic: couldn't commit new state: Permission denied`), resulting in a guest VM hang/panic, or completely crashing the host Android terminal application when a user attempts to open the display tab.
+4. **On-Demand Design:** The original display scripts avoided this by delaying Weston's start until the user logs into an interactive shell (triggering `/etc/profile.d/activate_display.sh`). This guarantees that the host display channel is open, powered, and ready to receive frames.
 
 ---
 
-## 2. Install Greetd
+## Steps to Revert to the Stable Configuration
 
-Install the `greetd` daemon from the Debian package manager:
+If you have applied the `greetd` configuration and are experiencing system restarts or display crashes, follow these steps to restore the original stable setup.
 
-```bash
-sudo apt update
-sudo apt install greetd -y
-```
+### 1. Stop and Disable the Greetd Service
 
----
-
-## 3. Create the Weston Wrapper Script
-
-Because the graphics environment configuration depends on whether hardware acceleration via Gfxstream is enabled, we create a wrapper script to export the proper environment variables before executing Weston.
-
-Create `/usr/local/bin/weston-wrapper`:
+Stop the running `greetd` instance and disable it from launching at boot:
 
 ```bash
-sudo nano /usr/local/bin/weston-wrapper
+# Stop the daemon immediately
+sudo systemctl stop greetd.service
+
+# Disable greetd from boot execution
+sudo systemctl disable greetd.service
 ```
 
-Add the following contents:
+### 2. Restore User systemd Manager and Services
+
+Make sure the user-level systemd manager is running and unmask the default user-space Weston units:
 
 ```bash
-#!/bin/bash
+# Ensure the user manager is active
+sudo systemctl start user@1000.service
 
-# Redirect stdout and stderr for debugging greetd launch
-exec 2> "/tmp/weston-wrapper-$(whoami).err"
-exec > "/tmp/weston-wrapper-$(whoami).log"
-
-echo "=== weston-wrapper started at $(date) ==="
-echo "User: $(whoami) (UID: $(id -u))"
-echo "Initial environment:"
-env
-
-# Ensure XDG_RUNTIME_DIR is set
-if [ -z "$XDG_RUNTIME_DIR" ]; then
-    export XDG_RUNTIME_DIR=/run/user/$(id -u)
-    echo "Set XDG_RUNTIME_DIR to $XDG_RUNTIME_DIR"
-fi
-
-# Detect if Gfxstream is enabled via kernel cmdline and export appropriate graphics variables
-if grep -q -w "gfxstream_enabled" /proc/cmdline; then
-    export MESA_LOADER_DRIVER_OVERRIDE=zink
-    export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/gfxstream_vk_icd.json
-    export MESA_VK_WSI_DEBUG=sw,linear
-    export XWAYLAND_NO_GLAMOR=1
-    export LIBGL_KOPPER_DRI2=1
-else
-    export MESA_LOADER_DRIVER_OVERRIDE=zink
-    export LIBGL_ALWAYS_SOFTWARE=1
-    export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
-fi
-
-# Launch Weston with support for XWayland and headless environments
-echo "Executing weston..."
-exec weston --xwayland --shell=desktop-shell.so --continue-without-input
+# Unmask the systemd user Weston service and socket
+XDG_RUNTIME_DIR=/run/user/1000 systemctl --user unmask weston.service weston.socket
 ```
 
-Make the script executable:
+### 3. Restore the Original Shell Profile Script
+
+Remove the custom greetd profile and restore the original on-demand display activation script from the backup directory:
 
 ```bash
-sudo chmod +x /usr/local/bin/weston-wrapper
-```
+# Restore the profile script
+sudo cp /home/droid/android-terminal-guide/configs/activate_display.sh /etc/profile.d/activate_display.sh
 
-> [!IMPORTANT]
-> **Wrapper Script Design Notes:**
-> * **Permissions-Safe Logging:** Logs are redirected to `/tmp/weston-wrapper-$(whoami).log` using the active username. If the script falls back to running under `_greetd` (for the fallback greeter), it can still write its logs successfully. Redirection to `/home/droid/` would cause the fallback greeter to fail due to permission denied.
-> * **XDG_RUNTIME_DIR Fallback:** In virtual/headless environments, the `XDG_RUNTIME_DIR` environment variable might not be immediately available during session startup. The script includes a fallback helper (`export XDG_RUNTIME_DIR=/run/user/$(id -u)`) to ensure Weston initializes correctly.
-
----
-
-## 4. Configure Greetd
-
-Greetd configuration is managed via `/etc/greetd/config.toml`. Configure `greetd` to auto-login the `droid` user and run the Weston wrapper script on boot.
-
-Open the configuration file:
-
-```bash
-sudo nano /etc/greetd/config.toml
-```
-
-Replace or update its content to match:
-
-```toml
-[terminal]
-# The Virtual Terminal (VT) to run on
-vt = 1
-
-[default_session]
-# The fallback session (greeter) to run if the user logs out or if initial_session fails
-command = "agreety --cmd /usr/local/bin/weston-wrapper"
-user = "_greetd"
-
-[initial_session]
-# Automatically log in the 'droid' user to Weston on system boot
-command = "/usr/local/bin/weston-wrapper"
-user = "droid"
-```
-
-> [!NOTE]
-> Debian systems typically use `_greetd` as the unprivileged system user for the login manager. If your system uses a different user (e.g. `greeter` or `greetd`), update the `user` field in `[default_session]` accordingly.
-
-Ensure the `droid` user has correct groups to access the display and input devices (this is usually configured by default):
-```bash
-sudo usermod -aG video,renderer,input droid
-```
-
----
-
-## 5. Configure the Shell Environment
-
-Since Weston is now started by `greetd` as a background PAM session on `tty1`, any new interactive terminal opened by the user (which runs on a pseudo-terminal `/dev/pts/*`) must know how to locate and connect to the Wayland/X11 display.
-
-Create or update `/etc/profile.d/activate_display.sh` to configure these environment variables dynamically:
-
-```bash
-sudo nano /etc/profile.d/activate_display.sh
-```
-
-Add the following contents:
-
-```bash
-#!/bin/bash
-
-# Only configure for the 'droid' user in interactive shell sessions
-if [[ "$USER" == "droid" && -n "$PS1" ]]; then
-  # Point applications to the Wayland display and XWayland server created by greetd's Weston
-  export WAYLAND_DISPLAY=wayland-0
-  export DISPLAY=:0
-
-  # Setup the graphics driver environment matching the system hardware
-  if grep -q -w "gfxstream_enabled" /proc/cmdline; then
-    export MESA_LOADER_DRIVER_OVERRIDE=zink
-    export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/gfxstream_vk_icd.json
-    export MESA_VK_WSI_DEBUG=sw,linear
-    export XWAYLAND_NO_GLAMOR=1
-    export LIBGL_KOPPER_DRI2=1
-  else
-    export MESA_LOADER_DRIVER_OVERRIDE=zink
-    export LIBGL_ALWAYS_SOFTWARE=1
-    export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
-  fi
-  
-  echo "Display environment variables configured for greetd-managed Weston session."
-fi
-```
-
-Make the profile script executable:
-
-```bash
+# Ensure execution permissions
 sudo chmod +x /etc/profile.d/activate_display.sh
 ```
 
----
+### 4. Remove the Wrapper Script & Greetd Backup Files
 
-## 6. Apply Changes
-
-Enable and start the `greetd` systemd service:
+Clean up the temporary wrapper script and greetd backup folders:
 
 ```bash
-# Enable greetd to run at system boot
-sudo systemctl enable greetd.service
+# Remove the wrapper binary
+sudo rm -f /usr/local/bin/weston-wrapper
 
-# Start greetd immediately
-sudo systemctl start greetd.service
+# Remove the temporary greetd configuration backups
+rm -rf /home/droid/android-terminal-guide/configs/greetd
 ```
 
-If you are already in an active login session, you can restart your terminal or source the profile script to access the display:
+### 5. Uninstall Greetd Package (Optional)
+
+To fully clean up greetd and its unprivileged system user (`_greetd`) from the system:
+
+```bash
+sudo apt purge greetd -y
+sudo apt autoremove -y
+```
+
+---
+
+## Verifying Restoration & Starting Display
+
+### 1. Interactive Shell Startup
+Once reverted, open a new interactive terminal window or source the profile script to trigger the display startup:
 
 ```bash
 source /etc/profile.d/activate_display.sh
 ```
 
----
+You should see the message:
+`Display is enabled. Please open a display activity before running any GUI applications.`
 
-## Troubleshooting & Debugging
+### 2. Manual Compositor Start (For Existing/Active Shells)
+If you are in an existing shell session where you just completed the reversion and want to start Weston right now without logging out or closing the terminal:
 
-If the graphical session fails to start or you need to inspect the configuration, use the following resources and techniques:
-
-### 1. Inspect Session Logs
-Since stderr and stdout of the wrapper are redirected, you can view real-time logs here:
-* **For the autologin session (`droid`):** 
-  `cat /tmp/weston-wrapper-droid.log` and `cat /tmp/weston-wrapper-droid.err`
-* **For the fallback greeter (`_greetd`):** 
-  `cat /tmp/weston-wrapper-_greetd.log` and `cat /tmp/weston-wrapper-_greetd.err`
-* **For the `greetd` daemon itself:** 
-  `sudo journalctl -u greetd.service -f`
-
-### 2. Force Autologin Re-run (Without Rebooting)
-By design, `greetd` tracks whether the `initial_session` has run using a temporary runfile (`/run/greetd.run`). On subsequent restarts of the `greetd` service, it will bypass autologin and fall back to the greeter/fallback session. 
-
-To test changes and force `greetd` to execute the autologin session again, delete the runfile before restarting:
 ```bash
-sudo rm -f /run/greetd.run && sudo systemctl restart greetd.service
+# Source the display profile
+source /etc/profile.d/activate_display.sh
+
+# Force-start the user-space Weston compositor under systemd user manager
+XDG_RUNTIME_DIR=/run/user/1000 systemctl --user start weston.service
 ```
+
+### 3. Open the Display
+Navigate to your terminal's **Display Activity** tab, and then launch your GUI application (e.g. `chromium`). It will render cleanly on screen without crashing the application.
+
