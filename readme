@@ -1,9 +1,9 @@
 # Android Terminal Guide
-## Extra recipe notes
+## Extra recipe notes for installing antigravity cli
 curl -fsSL https://antigravity.google/cli/install.sh | bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
-
+sudo apt install chromium -y
 
 ## Removing Weston
 
