@@ -1,8 +1,8 @@
 # Android Terminal Guide
 ## Extra recipe notes
 sudo apt update && sudo apt install -y nodejs npm
-npm install -g @google/gemini-cli
-sudo gemini login
+sudo npm install -g @google/gemini-cli
+gemini login
 
 ## Removing Weston
 
