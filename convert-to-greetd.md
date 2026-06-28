@@ -54,6 +54,21 @@ Add the following contents:
 ```bash
 #!/bin/bash
 
+# Redirect stdout and stderr for debugging greetd launch
+exec 2> "/tmp/weston-wrapper-$(whoami).err"
+exec > "/tmp/weston-wrapper-$(whoami).log"
+
+echo "=== weston-wrapper started at $(date) ==="
+echo "User: $(whoami) (UID: $(id -u))"
+echo "Initial environment:"
+env
+
+# Ensure XDG_RUNTIME_DIR is set
+if [ -z "$XDG_RUNTIME_DIR" ]; then
+    export XDG_RUNTIME_DIR=/run/user/$(id -u)
+    echo "Set XDG_RUNTIME_DIR to $XDG_RUNTIME_DIR"
+fi
+
 # Detect if Gfxstream is enabled via kernel cmdline and export appropriate graphics variables
 if grep -q -w "gfxstream_enabled" /proc/cmdline; then
     export MESA_LOADER_DRIVER_OVERRIDE=zink
@@ -68,6 +83,7 @@ else
 fi
 
 # Launch Weston with support for XWayland and headless environments
+echo "Executing weston..."
 exec weston --xwayland --shell=desktop-shell.so --continue-without-input
 ```
 
@@ -76,6 +92,11 @@ Make the script executable:
 ```bash
 sudo chmod +x /usr/local/bin/weston-wrapper
 ```
+
+> [!IMPORTANT]
+> **Wrapper Script Design Notes:**
+> * **Permissions-Safe Logging:** Logs are redirected to `/tmp/weston-wrapper-$(whoami).log` using the active username. If the script falls back to running under `_greetd` (for the fallback greeter), it can still write its logs successfully. Redirection to `/home/droid/` would cause the fallback greeter to fail due to permission denied.
+> * **XDG_RUNTIME_DIR Fallback:** In virtual/headless environments, the `XDG_RUNTIME_DIR` environment variable might not be immediately available during session startup. The script includes a fallback helper (`export XDG_RUNTIME_DIR=/run/user/$(id -u)`) to ensure Weston initializes correctly.
 
 ---
 
@@ -179,4 +200,27 @@ If you are already in an active login session, you can restart your terminal or 
 
 ```bash
 source /etc/profile.d/activate_display.sh
+```
+
+---
+
+## Troubleshooting & Debugging
+
+If the graphical session fails to start or you need to inspect the configuration, use the following resources and techniques:
+
+### 1. Inspect Session Logs
+Since stderr and stdout of the wrapper are redirected, you can view real-time logs here:
+* **For the autologin session (`droid`):** 
+  `cat /tmp/weston-wrapper-droid.log` and `cat /tmp/weston-wrapper-droid.err`
+* **For the fallback greeter (`_greetd`):** 
+  `cat /tmp/weston-wrapper-_greetd.log` and `cat /tmp/weston-wrapper-_greetd.err`
+* **For the `greetd` daemon itself:** 
+  `sudo journalctl -u greetd.service -f`
+
+### 2. Force Autologin Re-run (Without Rebooting)
+By design, `greetd` tracks whether the `initial_session` has run using a temporary runfile (`/run/greetd.run`). On subsequent restarts of the `greetd` service, it will bypass autologin and fall back to the greeter/fallback session. 
+
+To test changes and force `greetd` to execute the autologin session again, delete the runfile before restarting:
+```bash
+sudo rm -f /run/greetd.run && sudo systemctl restart greetd.service
 ```
