@@ -1,6 +1,6 @@
 # Converting Weston/Niri to LXQt with Labwc
 
-This guide documents the installation and configuration of LXQt (Qt 6) with **Labwc** (an Openbox-inspired Wayland compositor based on wlroots) in the Android terminal virtualized environment.
+This guide documents the installation, configuration, and troubleshooting of LXQt (Qt 6) with **Labwc** (an Openbox-inspired Wayland compositor based on wlroots) in the Android terminal virtualized environment.
 
 ---
 
@@ -20,8 +20,8 @@ Install LXQt desktop and Labwc compositor:
 sudo apt install -y lxqt labwc
 ```
 
-> [!NOTE]
-> `sddm` can remain installed if desired, but `sddm.service` **must be stopped and masked** to prevent boot-time DRM seat conflicts.
+> [!CAUTION]
+> `sddm` can remain installed if desired, but `sddm.service` **must be stopped and masked** to prevent boot-time DRM seat conflicts and VM panics.
 
 ```bash
 sudo systemctl stop sddm.service
@@ -42,9 +42,11 @@ systemctl --user mask weston.service weston.socket
 
 ---
 
-## 3. Create the Labwc + LXQt User Service
+## 3. Create the Labwc + LXQt User Service & Socket
 
-Create `/etc/systemd/user/labwc.service`:
+### `/etc/systemd/user/labwc.service`
+
+Virtio-GPU acceleration under Android guest VMs requires disabling atomic mode setting and hardware cursors in wlroots (`WLR_DRM_NO_ATOMIC=1`, `WLR_NO_HARDWARE_CURSORS=1`).
 
 ```ini
 [Unit]
@@ -59,6 +61,9 @@ StandardError=journal
 Environment="XDG_CURRENT_DESKTOP=LXQt"
 Environment="XDG_SESSION_TYPE=wayland"
 Environment="XDG_SESSION_DESKTOP=LXQt"
+Environment="WLR_DRM_NO_ATOMIC=1"
+Environment="WLR_NO_HARDWARE_CURSORS=1"
+Environment="WLR_RENDERER_ALLOW_SOFTWARE=1"
 EnvironmentFile=-/home/droid/labwc.env
 EnvironmentFile=-/home/droid/weston.env
 
@@ -68,6 +73,20 @@ RestartSec=1s
 
 [Install]
 WantedBy=graphical-session.target
+```
+
+### `/etc/systemd/user/labwc.socket`
+
+```ini
+[Unit]
+Description=Labwc Wayland Compositor Socket
+Documentation=man:labwc(1)
+
+[Socket]
+ListenStream=%t/wayland-0
+
+[Install]
+WantedBy=sockets.target
 ```
 
 ---
@@ -80,10 +99,17 @@ Update `/usr/local/bin/enable_display` and `/usr/local/bin/enable_gfxstream` to 
 
 ```bash
 #!/bin/bash
-echo > /home/droid/labwc.env
-echo > /home/droid/weston.env
+cat << EOF2 > /home/droid/labwc.env
+WLR_DRM_NO_ATOMIC=1
+WLR_NO_HARDWARE_CURSORS=1
+WLR_RENDERER_ALLOW_SOFTWARE=1
+XDG_CURRENT_DESKTOP=LXQt
+XDG_SESSION_TYPE=wayland
+XDG_SESSION_DESKTOP=LXQt
+EOF2
+cp /home/droid/labwc.env /home/droid/weston.env
 sudo systemd-run --quiet --collect -E XDG_SESSION_TYPE=wayland --uid=1000 -p PAMName=login -p TTYPath=/dev/tty1 sleep 1d
-systemctl --user set-environment XDG_CURRENT_DESKTOP=LXQt XDG_SESSION_TYPE=wayland XDG_SESSION_DESKTOP=LXQt
+systemctl --user set-environment WLR_DRM_NO_ATOMIC=1 WLR_NO_HARDWARE_CURSORS=1 WLR_RENDERER_ALLOW_SOFTWARE=1 XDG_CURRENT_DESKTOP=LXQt XDG_SESSION_TYPE=wayland XDG_SESSION_DESKTOP=LXQt
 (sleep 3s; systemctl --user start labwc)& disown
 export DISPLAY=:0
 export MESA_LOADER_DRIVER_OVERRIDE=zink
@@ -92,6 +118,8 @@ export LIBGL_ALWAYS_SOFTWARE=1
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
 export XDG_CURRENT_DESKTOP=LXQt
 export XDG_SESSION_TYPE=wayland
+export WLR_DRM_NO_ATOMIC=1
+export WLR_NO_HARDWARE_CURSORS=1
 ```
 
 ### `/usr/local/bin/enable_gfxstream`
@@ -103,12 +131,16 @@ MESA_LOADER_DRIVER_OVERRIDE=zink
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/gfxstream_vk_icd.json
 MESA_VK_WSI_DEBUG=sw,linear
 XWAYLAND_NO_GLAMOR=1
+WLR_DRM_NO_ATOMIC=1
+WLR_NO_HARDWARE_CURSORS=1
+WLR_RENDERER_ALLOW_SOFTWARE=1
 XDG_CURRENT_DESKTOP=LXQt
 XDG_SESSION_TYPE=wayland
+XDG_SESSION_DESKTOP=LXQt
 EOF2
 cp /home/droid/labwc.env /home/droid/weston.env
 sudo systemd-run --quiet --collect -E XDG_SESSION_TYPE=wayland --uid=1000 -p PAMName=login -p TTYPath=/dev/tty1 sleep 1d
-systemctl --user set-environment MESA_LOADER_DRIVER_OVERRIDE=zink VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/gfxstream_vk_icd.json MESA_VK_WSI_DEBUG=sw,linear XWAYLAND_NO_GLAMOR=1 XDG_CURRENT_DESKTOP=LXQt XDG_SESSION_TYPE=wayland XDG_SESSION_DESKTOP=LXQt
+systemctl --user set-environment MESA_LOADER_DRIVER_OVERRIDE=zink VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/gfxstream_vk_icd.json MESA_VK_WSI_DEBUG=sw,linear XWAYLAND_NO_GLAMOR=1 WLR_DRM_NO_ATOMIC=1 WLR_NO_HARDWARE_CURSORS=1 WLR_RENDERER_ALLOW_SOFTWARE=1 XDG_CURRENT_DESKTOP=LXQt XDG_SESSION_TYPE=wayland XDG_SESSION_DESKTOP=LXQt
 (sleep 3s; systemctl --user start labwc)& disown
 export DISPLAY=:0
 export MESA_LOADER_DRIVER_OVERRIDE=zink
@@ -123,11 +155,34 @@ export XWAYLAND_NO_GLAMOR=1
 export LIBGL_KOPPER_DRI2=1
 export XDG_CURRENT_DESKTOP=LXQt
 export XDG_SESSION_TYPE=wayland
+export WLR_DRM_NO_ATOMIC=1
+export WLR_NO_HARDWARE_CURSORS=1
 ```
 
 ---
 
-## 5. Verification
+## 5. Troubleshooting & Architectural Notes
+
+### Virtio-GPU DRM Atomic Commit Errors
+When running `wlroots`-based compositors (such as `labwc`) in virtio-gpu virtual machines, the following error may repeat in `journalctl`:
+```text
+labwc: [ERROR] [backend/drm/atomic.c:79] connector Virtual-1: Atomic commit failed: Invalid argument
+```
+**Solution:** `wlroots` requires explicit environment overrides to bypass DRM atomic commits and hardware mouse cursor plane commits on virtual DRM connectors:
+- `WLR_DRM_NO_ATOMIC=1` — Enforces legacy DRM modesetting on `Virtual-1`.
+- `WLR_NO_HARDWARE_CURSORS=1` — Uses software cursor rendering.
+- `WLR_RENDERER_ALLOW_SOFTWARE=1` — Enables software rendering fallback.
+
+### Wayland Socket Timing with Android Guest Agent (`linux_vm_manager`)
+If `linux_vm_manager` attempts to bridge the display before `labwc` initializes `/run/user/1000/wayland-0`, the following error occurs:
+```text
+linux_vm_manager: Failed to connect to a Wayland server: No such file or directory
+```
+**Solution:** Ensure `/etc/systemd/user/labwc.socket` is installed and run `systemctl --user daemon-reload`. Socket activation keeps `/run/user/1000/wayland-0` ready for `linux_vm_manager` upon session startup.
+
+---
+
+## 6. Verification
 
 Check the active session state:
 
