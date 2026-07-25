@@ -1,4 +1,4 @@
-# Converting Weston to LXQt with Labwc
+# Converting Weston/Niri to LXQt with Labwc
 
 This guide documents the installation, configuration, scaling, and troubleshooting of LXQt (Qt 6) with **Labwc** (an Openbox-inspired Wayland compositor based on wlroots) in the Android terminal virtualized environment.
 
@@ -120,6 +120,31 @@ XDG_SESSION_TYPE=wayland
 XDG_SESSION_DESKTOP=LXQt
 QT_ENABLE_HIGHDPI_SCALING=1
 XFT_DPI=120
+```
+
+### `~/.config/labwc/rc.xml` (Mouse Sensitivity & Input Configuration)
+
+LXQt mouse settings rely on X11 (`xset`/`xinput`) and are unsupported under Wayland. Mouse pointer sensitivity and acceleration are configured via Labwc's libinput configuration:
+
+```xml
+<?xml version="1.0"?>
+<labwc_config>
+  <libinput>
+    <device category="default">
+      <pointerSpeed>-0.5</pointerSpeed>
+      <accelProfile>adaptive</accelProfile>
+    </device>
+  </libinput>
+</labwc_config>
+```
+
+- **`pointerSpeed`**: Ranges from `-1.0` (slowest) to `1.0` (fastest); default is `0.0`. Set negative values (e.g., `-0.5`) to decrease high sensitivity.
+- **`accelProfile`**: `adaptive` (accelerates based on movement speed) or `flat` (linear, constant speed).
+
+To reload settings without restarting the session:
+
+```bash
+labwc --reconfigure
 ```
 
 ---
