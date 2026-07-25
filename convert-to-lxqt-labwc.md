@@ -1,6 +1,6 @@
-# Converting Weston/Niri to LXQt with Labwc
+# Converting Weston to LXQt with Labwc
 
-This guide documents the installation, configuration, and troubleshooting of LXQt (Qt 6) with **Labwc** (an Openbox-inspired Wayland compositor based on wlroots) in the Android terminal virtualized environment.
+This guide documents the installation, configuration, scaling, and troubleshooting of LXQt (Qt 6) with **Labwc** (an Openbox-inspired Wayland compositor based on wlroots) in the Android terminal virtualized environment.
 
 ---
 
@@ -14,10 +14,10 @@ To ensure stability and seamless display rendering, LXQt with Labwc is initializ
 
 ## 1. Package Installation
 
-Install LXQt desktop and Labwc compositor:
+Install LXQt desktop, Labwc compositor, and Wayland randr utility:
 
 ```bash
-sudo apt install -y lxqt labwc
+sudo apt install -y lxqt labwc wlr-randr
 ```
 
 > [!CAUTION]
@@ -91,7 +91,40 @@ WantedBy=sockets.target
 
 ---
 
-## 4. Update Display Startup Scripts
+## 4. Display Scaling & Environment Configuration
+
+### `~/.config/labwc/autostart`
+
+Apply automatic output scaling via `wlr-randr` on compositor startup:
+
+```bash
+#!/bin/sh
+# Apply output scaling for high-DPI displays
+wlr-randr --output Virtual-1 --scale 1.25
+```
+
+Ensure the autostart script has execution permissions:
+
+```bash
+chmod +x ~/.config/labwc/autostart
+```
+
+### `~/.config/labwc/environment`
+
+```bash
+WLR_DRM_NO_ATOMIC=1
+WLR_NO_HARDWARE_CURSORS=1
+WLR_RENDERER_ALLOW_SOFTWARE=1
+XDG_CURRENT_DESKTOP=LXQt
+XDG_SESSION_TYPE=wayland
+XDG_SESSION_DESKTOP=LXQt
+QT_ENABLE_HIGHDPI_SCALING=1
+XFT_DPI=120
+```
+
+---
+
+## 5. Update Display Startup Scripts
 
 Update `/usr/local/bin/enable_display` and `/usr/local/bin/enable_gfxstream` to inject LXQt environment variables into systemd user manager and trigger `labwc` service start:
 
@@ -161,7 +194,7 @@ export WLR_NO_HARDWARE_CURSORS=1
 
 ---
 
-## 5. Troubleshooting & Architectural Notes
+## 6. Troubleshooting & Architectural Notes
 
 ### Virtio-GPU DRM Atomic Commit Errors
 When running `wlroots`-based compositors (such as `labwc`) in virtio-gpu virtual machines, the following error may repeat in `journalctl`:
@@ -182,7 +215,7 @@ linux_vm_manager: Failed to connect to a Wayland server: No such file or directo
 
 ---
 
-## 6. Verification
+## 7. Verification
 
 Check the active session state:
 
