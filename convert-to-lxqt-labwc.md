@@ -20,9 +20,6 @@ Install LXQt desktop, Labwc compositor, and Wayland randr utility:
 sudo apt install -y lxqt labwc wlr-randr
 ```
 
-> [!CAUTION]
-> `sddm` can remain installed if desired, but `sddm.service` **must be stopped and masked** to prevent boot-time DRM seat conflicts and VM panics.
-
 ```bash
 sudo systemctl stop sddm.service
 sudo systemctl disable sddm.service
