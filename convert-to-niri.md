@@ -1,4 +1,4 @@
-# Converting from Weston to Niri
+# NOT WORKING Converting from Weston to Niri
 
 This guide outlines the steps to migrate the initial graphical session from Weston to Niri (a scrollable-tiling Wayland compositor) within the Android terminal environment.
 
