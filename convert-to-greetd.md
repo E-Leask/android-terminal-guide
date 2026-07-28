@@ -1,4 +1,4 @@
-# Converting Weston to Launch via Greetd (Architectural Limitations & Recovery)
+# NOT WORKING Converting Weston to Launch via Greetd (Architectural Limitations & Recovery)
 
 > [!CAUTION]
 > **UNSTABLE CONFIGURATION WARNING:**
