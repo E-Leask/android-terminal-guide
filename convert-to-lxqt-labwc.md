@@ -1,6 +1,9 @@
 # Converting Weston/Niri to LXQt with Labwc
 
-This guide documents the installation, configuration, scaling, and troubleshooting of LXQt (Qt 6) with **Labwc** (an Openbox-inspired Wayland compositor based on wlroots) in the Android terminal virtualized environment.
+This guide documents the installation, core configuration, and troubleshooting of LXQt (Qt 6) with **Labwc** (an Openbox-inspired Wayland compositor based on wlroots) in the Android terminal virtualized environment.
+
+> [!TIP]
+> For optional usability enhancements (scaling, wallpaper setup, removing dummy windows), see [lxqt-quality-of-life-tweaks.md](file:///home/droid/android-terminal-guide/lxqt-quality-of-life-tweaks.md).
 
 ---
 
