@@ -106,3 +106,34 @@ Available modes: `zoom` (scale & crop), `fit` (preserve aspect ratio), `stretch`
 1. Right-click any open space on the desktop canvas.
 2. Select **Desktop Preferences**.
 3. Under **Wallpaper**, select your image file and desired layout mode.
+
+---
+
+## 6. Software Center & Flatpak Setup (KDE Discover)
+
+Setting up **KDE Discover** provides LXQt with a native Qt-based graphical software store with full support for standard Debian `.deb` packages and **Flatpak** applications (via Flathub).
+
+### A. Installation & Flathub Integration
+Install `plasma-discover`, the Flatpak backend plugin, and configure the Flathub repository:
+
+```bash
+sudo apt update
+sudo apt install -y flatpak plasma-discover plasma-discover-backend-flatpak
+
+# Add the Flathub repository
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+```
+
+> **Note**: Log out and log back in (or restart your session) after installation so desktop shortcuts and environment paths refresh.
+
+### B. Optional: Theme & Permission Tools
+To ensure Flatpak applications match your LXQt/Qt desktop theme and allow easy permission control:
+
+```bash
+# Install KDE Control Module for Flatpak configuration
+sudo apt install -y kde-config-flatpak
+
+# Optional: Install Flatseal for GUI permission management (via apt or flatpak)
+sudo apt install -y flatseal
+# Or via Flathub: flatpak install -y flathub com.github.tchx84.Flatseal
+```
