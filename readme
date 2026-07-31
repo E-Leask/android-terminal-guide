@@ -5,6 +5,9 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 sudo apt install chromium -y
 
+## Additional Documentation
+- [powervr-gfxstream-optimization.md](file:///home/droid/android-terminal-guide/powervr-gfxstream-optimization.md): Comprehensive guide on Pixel 10 (PowerVR) GPU support, GameNative findings, Debian GfxStream graphics architecture, host patching, and Wayland/Xwayland optimizations.
+
 ## Disabling Weston
 
 To remove Weston from launching as the display server, follow these steps:
