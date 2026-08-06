@@ -6,7 +6,8 @@ source ~/.bashrc
 sudo apt install chromium -y
 
 ## Additional Documentation
-- [gfxstream-vulkan-blob-investigation.md](file:///home/droid/android-terminal-guide/gfxstream-vulkan-blob-investigation.md): Deep-dive empirical investigation, C test suite results, and root-cause analysis of Gfxstream Vulkan `VIRTGPU_BLOB_MEM_HOST3D`, `vkGetMemoryFdKHR` dedicated image requirements, and system-wide fixes.
+- [vulkan-dedicated-shim-guide.md](file:///home/droid/android-terminal-guide/vulkan-dedicated-shim-guide.md): Complete C source code, Vulkan implicit layer JSON manifest, step-by-step compilation, deployment, and configuration guide for `libvulkan_dedicated_shim.so`.
+- [gfxstream-vulkan-blob-investigation.md](file:///home/droid/android-terminal-guide/gfxstream-vulkan-blob-investigation.md): Deep-dive empirical investigation, C test suite results, stress testing findings, and root-cause analysis of Gfxstream Vulkan `VIRTGPU_BLOB_MEM_HOST3D`, `vkGetMemoryFdKHR` dedicated image requirements, and system-wide fixes.
 - [powervr-gfxstream-optimization.md](file:///home/droid/android-terminal-guide/powervr-gfxstream-optimization.md): Comprehensive guide on Pixel 10 (PowerVR) GPU support, GameNative findings, Debian GfxStream graphics architecture, host patching, and Wayland/Xwayland optimizations.
 
 ## Disabling Weston
