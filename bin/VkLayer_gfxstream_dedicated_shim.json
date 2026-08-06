@@ -1,0 +1,18 @@
+{
+    "file_format_version" : "1.0.0",
+    "layer" : {
+        "name": "VK_LAYER_GFXSTREAM_dedicated_shim",
+        "type": "GLOBAL",
+        "library_path": "/usr/lib/aarch64-linux-gnu/libvulkan_dedicated_shim.so",
+        "api_version": "1.4.0",
+        "implementation_version": "1",
+        "description": "Automatic VkMemoryDedicatedAllocateInfo injector for Gfxstream DMA-BUF exports",
+        "functions": {
+            "vkGetInstanceProcAddr": "Shim_GetInstanceProcAddr",
+            "vkGetDeviceProcAddr": "Shim_GetDeviceProcAddr"
+        },
+        "disable_environment": {
+            "DISABLE_GFXSTREAM_DEDICATED_SHIM": "1"
+        }
+    }
+}
