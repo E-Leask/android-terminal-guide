@@ -1,6 +1,6 @@
 # Gfxstream Vulkan & `VIRTGPU_BLOB_MEM_HOST3D` Investigation & Diagnosis
 
-This document provides a comprehensive summary of the architecture investigation, empirical command outputs, C experiment results, root-cause analysis, and system-wide Vulkan Implicit Layer implementation for graphics virtualization (**Gfxstream / AVF / VirtIO-GPU**) on the **Pixel 10** (Android 16 / Linux 6.12 AVF Debian VM).
+This document provides a comprehensive summary of the architecture investigation, empirical command outputs, C experiment results, root-cause analysis, system-wide Vulkan Implicit Layer implementation, and LXQt session recovery for graphics virtualization (**Gfxstream / AVF / VirtIO-GPU**) on the **Pixel 10** (Android 16 / Linux 6.12 AVF Debian VM).
 
 ---
 
@@ -11,7 +11,8 @@ This document provides a comprehensive summary of the architecture investigation
 3. **Guest Mesa ICD (`libvulkan_gfxstream.so`)**: Confirmed to expose `VK_EXT_external_memory_dma_buf` and `VK_KHR_external_memory_fd` for host **PowerVR D-Series** GPU forwarding.
 4. **`journalctl` Mesa Error Investigation**: Isolated the root cause of `MESA: error: drmPrimeHandleToFD failed with No such file or directory` during GUI application launches (e.g. PCManFM-Qt under `labwc`).
 5. **Experimental Proof**: Proved via a custom C Vulkan test suite that Gfxstream requires **`VkMemoryDedicatedAllocateInfo::image`** alongside `VkExportMemoryAllocateInfo` to export DMA-BUF file descriptors (`FD = 5`). Non-dedicated surface allocations fail DMA-BUF export and fall back to software linear (`sw,linear` / `wl_shm`) rendering.
-6. **System-Wide Resolution (Path 3 Implemented)**: Deployed a global **Vulkan Implicit Layer Shim (`libvulkan_dedicated_shim.so`)** in `/usr/lib/aarch64-linux-gnu/` and `/usr/share/vulkan/implicit_layer.d/VkLayer_gfxstream_dedicated_shim.json`. The layer automatically injects dedicated image allocation metadata into `vkAllocateMemory` calls system-wide, allowing zero-copy DMA-BUF exports for all applications without log errors.
+6. **System-Wide Resolution (Vulkan Implicit Layer)**: Deployed a global **Vulkan Implicit Layer Shim (`libvulkan_dedicated_shim.so`)** in `/usr/lib/aarch64-linux-gnu/` and `/usr/share/vulkan/implicit_layer.d/VkLayer_gfxstream_dedicated_shim.json`. The layer automatically injects dedicated image allocation metadata into `vkAllocateMemory` calls system-wide.
+7. **LXQt Session Recovery**: Removed legacy `MESA_LOADER_DRIVER_OVERRIDE=zink` override from `/usr/local/bin/enable_gfxstream` and `/usr/local/bin/enable_display` which was blocking Zink instance creation and preventing `lxqt-session` startup. Full LXQt desktop (`lxqt-panel`, `pcmanfm-qt --desktop`, `lxqt-runner`, `lxqt-notificationd`) is now running natively.
 
 ---
 
@@ -167,8 +168,27 @@ The layer intercepts `vkCreateImage`, `vkGetImageMemoryRequirements2`, and `vkAl
 }
 ```
 
+---
+
+## 6. LXQt Session Launch & Verification
+
+With `MESA_LOADER_DRIVER_OVERRIDE=zink` removed from startup scripts, the entire LXQt desktop suite launches cleanly:
+
+```bash
+ps -ef | grep -iE "lxqt|labwc|pcmanfm"
+```
+**Process Tree Output:**
+```text
+droid        738     461 58 03:30 ?        00:00:03 /usr/bin/labwc -S lxqt-session
+droid        768     738  5 03:30 ?        00:00:00 lxqt-session
+droid        785     768 99 03:30 ?        00:00:03 /usr/bin/pcmanfm-qt --desktop --profile=lxqt
+droid        786     768  6 03:30 ?        00:00:00 /usr/bin/lxqt-notificationd
+droid        790     768 17 03:30 ?        00:00:00 /usr/bin/lxqt-panel
+droid        792     768  5 03:30 ?        00:00:00 /usr/bin/lxqt-policykit-agent
+droid        794     768 11 03:30 ?        00:00:00 /usr/bin/lxqt-runner
+```
+
 ### Verification:
-With the layer installed system-wide:
 * `vulkaninfo --summary` loads clean without warnings.
 * `pcmanfm-qt`, `labwc`, and all desktop applications allocate Vulkan memory with dedicated image metadata automatically.
 * Zero `drmPrimeHandleToFD` or `MESA: error` lines are logged to `journalctl`.
