@@ -56,6 +56,8 @@ Before=graphical-session.target
 
 [Service]
 Type=simple
+Nice=-10
+LimitNICE=-10
 StandardOutput=journal
 StandardError=journal
 Environment="XDG_CURRENT_DESKTOP=LXQt"
@@ -64,10 +66,12 @@ Environment="XDG_SESSION_DESKTOP=LXQt"
 Environment="WLR_DRM_NO_ATOMIC=1"
 Environment="WLR_NO_HARDWARE_CURSORS=1"
 Environment="WLR_RENDERER_ALLOW_SOFTWARE=1"
+Environment="WLR_RENDERER=gles2"
 EnvironmentFile=-/home/droid/labwc.env
 EnvironmentFile=-/home/droid/weston.env
 
 ExecStart=/usr/bin/labwc -S lxqt-session
+ExecStartPost=/usr/bin/sudo /usr/bin/renice -n -10 -p $MAINPID
 Restart=on-failure
 RestartSec=1s
 
@@ -167,7 +171,7 @@ XDG_SESSION_DESKTOP=LXQt
 EOF2
 cp /home/droid/labwc.env /home/droid/weston.env
 sudo systemd-run --quiet --collect -E XDG_SESSION_TYPE=wayland --uid=1000 -p PAMName=login -p TTYPath=/dev/tty1 sleep 1d
-systemctl --user set-environment WLR_DRM_NO_ATOMIC=1 WLR_NO_HARDWARE_CURSORS=1 WLR_RENDERER_ALLOW_SOFTWARE=1 XDG_CURRENT_DESKTOP=LXQt XDG_SESSION_TYPE=wayland XDG_SESSION_DESKTOP=LXQt
+systemctl --user set-environment WLR_DRM_NO_ATOMIC=1 WLR_NO_HARDWARE_CURSORS=1 WLR_RENDERER_ALLOW_SOFTWARE=1 WLR_RENDERER=gles2 XDG_CURRENT_DESKTOP=LXQt XDG_SESSION_TYPE=wayland XDG_SESSION_DESKTOP=LXQt
 (sleep 3s; systemctl --user start labwc)& disown
 export DISPLAY=:0
 export MESA_LOADER_DRIVER_OVERRIDE=zink
@@ -178,6 +182,7 @@ export XDG_CURRENT_DESKTOP=LXQt
 export XDG_SESSION_TYPE=wayland
 export WLR_DRM_NO_ATOMIC=1
 export WLR_NO_HARDWARE_CURSORS=1
+export WLR_RENDERER=gles2
 ```
 
 ### `/usr/local/bin/enable_gfxstream`
@@ -198,7 +203,7 @@ XDG_SESSION_DESKTOP=LXQt
 EOF2
 cp /home/droid/labwc.env /home/droid/weston.env
 sudo systemd-run --quiet --collect -E XDG_SESSION_TYPE=wayland --uid=1000 -p PAMName=login -p TTYPath=/dev/tty1 sleep 1d
-systemctl --user set-environment MESA_LOADER_DRIVER_OVERRIDE=zink VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/gfxstream_vk_icd.json MESA_VK_WSI_DEBUG=sw,linear XWAYLAND_NO_GLAMOR=1 WLR_DRM_NO_ATOMIC=1 WLR_NO_HARDWARE_CURSORS=1 WLR_RENDERER_ALLOW_SOFTWARE=1 XDG_CURRENT_DESKTOP=LXQt XDG_SESSION_TYPE=wayland XDG_SESSION_DESKTOP=LXQt
+systemctl --user set-environment MESA_LOADER_DRIVER_OVERRIDE=zink VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/gfxstream_vk_icd.json MESA_VK_WSI_DEBUG=sw,linear XWAYLAND_NO_GLAMOR=1 WLR_DRM_NO_ATOMIC=1 WLR_NO_HARDWARE_CURSORS=1 WLR_RENDERER_ALLOW_SOFTWARE=1 WLR_RENDERER=gles2 XDG_CURRENT_DESKTOP=LXQt XDG_SESSION_TYPE=wayland XDG_SESSION_DESKTOP=LXQt
 (sleep 3s; systemctl --user start labwc)& disown
 export DISPLAY=:0
 export MESA_LOADER_DRIVER_OVERRIDE=zink
@@ -215,6 +220,7 @@ export XDG_CURRENT_DESKTOP=LXQt
 export XDG_SESSION_TYPE=wayland
 export WLR_DRM_NO_ATOMIC=1
 export WLR_NO_HARDWARE_CURSORS=1
+export WLR_RENDERER=gles2
 ```
 
 ---
